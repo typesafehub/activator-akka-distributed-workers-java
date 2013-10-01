@@ -11,3 +11,5 @@ libraryDependencies ++= Seq(
   "com.novocode" % "junit-interface" % "0.9" % "test->default")
 
 testOptions += Tests.Argument(TestFrameworks.JUnit, "-v", "-a")
+
+compileOrder := CompileOrder.JavaThenScala
