@@ -4,7 +4,6 @@ import akka.actor.*;
 import akka.cluster.Cluster;
 import akka.contrib.pattern.ClusterClient;
 import akka.contrib.pattern.ClusterSingletonManager;
-import akka.contrib.pattern.ClusterSingletonPropsFactory;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import scala.concurrent.duration.Duration;
@@ -34,12 +33,8 @@ public class Main {
       (joinAddress == null) ? Cluster.get(system).selfAddress() : joinAddress;
     Cluster.get(system).join(realJoinAddress);
 
-    system.actorOf(ClusterSingletonManager.defaultProps("active",
-      PoisonPill.getInstance(), role, new ClusterSingletonPropsFactory() {
-      public Props create(Object handOverData) {
-        return Master.props(workTimeout);
-      }
-    }), "master");
+    system.actorOf(ClusterSingletonManager.defaultProps(Master.props(workTimeout), "active",
+      PoisonPill.getInstance(), role), "master");
 
     return realJoinAddress;
   }
