@@ -36,12 +36,8 @@ public class DistributedWorkerTest {
     new JavaTestKit(system) {{
       Address clusterAddress = Cluster.get(system).selfAddress();
       Cluster.get(system).join(clusterAddress);
-      system.actorOf(ClusterSingletonManager.defaultProps("active",
-        PoisonPill.getInstance(), "", new ClusterSingletonPropsFactory() {
-        public Props create(Object handOverData) {
-          return Master.props(workTimeout);
-        }
-      }), "master");
+      system.actorOf(ClusterSingletonManager.defaultProps(Master.props(workTimeout), "active",
+        PoisonPill.getInstance(), ""), "master");
 
       Set<ActorSelection> initialContacts = new HashSet<ActorSelection>();
       initialContacts.add(system.actorSelection(clusterAddress + "/user/receptionist"));
@@ -81,7 +77,7 @@ public class DistributedWorkerTest {
         expectMsgEquals(Frontend.Ok.getInstance());
       }
 
-      new Within(duration("10 seconds")) {
+      results.new Within(duration("10 seconds")) {
         public void run() {
           Object[] messages = results.receiveN(99);
           SortedSet<Integer> set = new TreeSet<Integer>();
