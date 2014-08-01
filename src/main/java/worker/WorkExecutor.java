@@ -14,7 +14,7 @@ public class WorkExecutor extends UntypedActor {
       Integer n = (Integer) message;
       int n2 = n.intValue() * n.intValue();
       String result = n + " * " + n + " = " + n2;
-      log.debug("Produced result {}", result);
+      log.info("Produced result {}", result);
       getSender().tell(new Worker.WorkComplete(result), getSelf());
     }
   }

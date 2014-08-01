@@ -2,27 +2,31 @@ package worker;
 
 import akka.actor.ActorRef;
 import akka.actor.UntypedActor;
-import akka.contrib.pattern.DistributedPubSubExtension;
-import akka.contrib.pattern.DistributedPubSubMediator.Send;
+import akka.contrib.pattern.ClusterSingletonProxy;
 import akka.dispatch.Mapper;
 import akka.dispatch.Recover;
 import akka.util.Timeout;
+
 import java.io.Serializable;
-import scala.concurrent.duration.*;
+import java.util.concurrent.TimeUnit;
+
 import scala.concurrent.ExecutionContext;
 import scala.concurrent.Future;
-
 import static akka.pattern.Patterns.ask;
 import static akka.pattern.Patterns.pipe;
 
 public class Frontend extends UntypedActor {
 
 
-  final ActorRef mediator = DistributedPubSubExtension.get(getContext().system()).mediator();
+  ActorRef masterProxy = getContext().actorOf(
+      ClusterSingletonProxy.defaultProps("/user/master/active", "backend")
+      , "masterProxy");
 
   public void onReceive(Object message) {
-    Future<Object> f =
-      ask(mediator, new Send("/user/master/active", message, false), new Timeout(Duration.create(5, "seconds")));
+
+    Timeout timeout = new Timeout(5, TimeUnit.SECONDS);
+    Future<Object> f = ask(masterProxy, message, timeout);
+
 
     final ExecutionContext ec = getContext().system().dispatcher();
 
