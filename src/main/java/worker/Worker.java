@@ -5,11 +5,13 @@ import akka.contrib.pattern.ClusterClient.SendToAll;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
 import akka.japi.Function;
+import akka.japi.Procedure;
+
 import java.io.Serializable;
 import java.util.UUID;
+
 import scala.concurrent.duration.Duration;
 import scala.concurrent.duration.FiniteDuration;
-
 import static akka.actor.SupervisorStrategy.Directive;
 import static akka.actor.SupervisorStrategy.escalate;
 import static akka.actor.SupervisorStrategy.restart;
@@ -29,8 +31,6 @@ public class Worker extends UntypedActor {
   }
 
   private final ActorRef clusterClient;
-  private final Props workExecutorProps;
-  private final FiniteDuration registerInterval;
   private LoggingAdapter log = Logging.getLogger(getContext().system(), this);
   private final String workerId = UUID.randomUUID().toString();
   private final ActorRef workExecutor;
@@ -39,12 +39,10 @@ public class Worker extends UntypedActor {
 
   public Worker(ActorRef clusterClient, Props workExecutorProps, FiniteDuration registerInterval) {
     this.clusterClient = clusterClient;
-    this.workExecutorProps = workExecutorProps;
-    this.registerInterval = registerInterval;
     this.workExecutor = getContext().watch(getContext().actorOf(workExecutorProps, "exec"));
     this.registerTask = getContext().system().scheduler().schedule(Duration.Zero(), registerInterval,
-      clusterClient, new SendToAll("/user/master/active", new RegisterWorker(workerId)),
-      getContext().dispatcher(), getSelf());
+        clusterClient, new SendToAll("/user/master/active", new RegisterWorker(workerId)),
+        getContext().dispatcher(), getSelf());
   }
 
   private String workId() {
@@ -87,13 +85,13 @@ public class Worker extends UntypedActor {
     unhandled(message);
   }
 
-  private final Behavior idle = new Behavior() {
+  private final Procedure<Object> idle = new Procedure<Object>() {
     public void apply(Object message) {
       if (message instanceof MasterWorkerProtocol.WorkIsReady)
         sendToMaster(new MasterWorkerProtocol.WorkerRequestsWork(workerId));
       else if (message instanceof Work) {
         Work work = (Work) message;
-        log.debug("Got work: {}", work.job);
+        log.info("Got work: {}", work.job);
         currentWorkId = work.workId;
         workExecutor.tell(work.job, getSelf());
         getContext().become(working);
@@ -102,11 +100,11 @@ public class Worker extends UntypedActor {
     }
   };
 
-  private final Behavior working = new Behavior() {
+  private final Procedure<Object> working = new Procedure<Object>() {
     public void apply(Object message) {
       if (message instanceof WorkComplete) {
         Object result = ((WorkComplete) message).result;
-        log.debug("Work is complete. Result {}.", result);
+        log.info("Work is complete. Result {}.", result);
         sendToMaster(new WorkIsDone(workerId, workId(), result));
         getContext().setReceiveTimeout(Duration.create(5, "seconds"));
         getContext().become(waitForWorkIsDoneAck(result));
@@ -120,8 +118,8 @@ public class Worker extends UntypedActor {
     }
   };
 
-  private Behavior waitForWorkIsDoneAck(final Object result) {
-    return new Behavior() {
+  private Procedure<Object> waitForWorkIsDoneAck(final Object result) {
+    return new Procedure<Object>() {
       public void apply(Object message) {
         if (message instanceof Ack && ((Ack) message).workId.equals(workId())) {
           sendToMaster(new WorkerRequestsWork(workerId));
@@ -170,8 +168,8 @@ public class Worker extends UntypedActor {
     @Override
     public String toString() {
       return "WorkComplete{" +
-        "result=" + result +
-        '}';
+          "result=" + result +
+          '}';
     }
   }
 }

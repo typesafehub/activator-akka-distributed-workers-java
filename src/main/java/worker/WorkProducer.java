@@ -5,12 +5,14 @@ import akka.actor.Scheduler;
 import akka.actor.UntypedActor;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
+import akka.japi.Procedure;
+
 import java.util.UUID;
+
 import scala.concurrent.duration.*;
 import scala.concurrent.ExecutionContext;
 import scala.concurrent.forkjoin.ThreadLocalRandom;
 import worker.Master.Work;
-
 import static worker.Frontend.NotOk;
 import static worker.Frontend.Ok;
 
@@ -56,9 +58,8 @@ public class WorkProducer extends UntypedActor {
     }
   }
 
-  private Behavior waitAccepted(final Work work) {
-    return new Behavior() {
-      @Override
+  private Procedure<Object> waitAccepted(final Work work) {
+    return new Procedure<Object>() {
       public void apply(Object message) {
         if (message instanceof Ok) {
           getContext().unbecome();
