@@ -1,7 +1,6 @@
 package worker;
 
 import akka.actor.*;
-import akka.cluster.Cluster;
 import akka.contrib.pattern.ClusterClient;
 import akka.contrib.pattern.ClusterSingletonManager;
 import akka.dispatch.OnFailure;
@@ -24,14 +23,23 @@ import java.util.concurrent.TimeUnit;
 
 public class Main {
   public static void main(String[] args) throws InterruptedException {
-    startBackend(2551, "backend");
-    Thread.sleep(5000);
-    startBackend(2552, "backend");
-    startWorker(0);
-    Thread.sleep(5000);
-    startFrontend(0);
-
-
+    if (args.length == 0) {
+      startBackend(2551, "backend");
+      Thread.sleep(5000);
+      startBackend(2552, "backend");
+      startWorker(0);
+      Thread.sleep(5000);
+      startFrontend(0);
+    }
+    else {
+      int port = Integer.parseInt(args[0]);
+      if (2000 <= port && port <= 2999)
+        startBackend(port, "backend");
+      else if (3000 <= port && port <= 3999)
+        startFrontend(port);
+      else
+        startWorker(port);
+    }
   }
 
   private static FiniteDuration workTimeout = Duration.create(10, "seconds");
@@ -48,7 +56,6 @@ public class Main {
 
     system.actorOf(ClusterSingletonManager.defaultProps(Master.props(workTimeout), "active",
         PoisonPill.getInstance(), role), "master");
-
   }
 
   public static void startWorker(int port) {
@@ -64,20 +71,16 @@ public class Main {
 
     final ActorRef clusterClient = system.actorOf(ClusterClient.defaultProps(initialContacts), "clusterClient");
     system.actorOf(Worker.props(clusterClient, Props.create(WorkExecutor.class)), "worker");
-
-
-
   }
 
   public static void startFrontend(int port) {
     Config conf = ConfigFactory.parseString("akka.remote.netty.tcp.port=" + port).
-        withFallback(ConfigFactory.load());  
+        withFallback(ConfigFactory.load());
+
     ActorSystem system = ActorSystem.create("ClusterSystem", conf);
     ActorRef frontend = system.actorOf(Props.create(Frontend.class), "frontend");
     system.actorOf(Props.create(WorkProducer.class, frontend), "producer");
     system.actorOf(Props.create(WorkResultConsumer.class), "consumer");
-
-
   }
 
 
@@ -111,9 +114,5 @@ public class Main {
       public void onFailure(Throwable arg0) throws Throwable {
         System.err.println("Lookup of shared journal at "+path+" timed out" );
       }}, system.dispatcher());
-
-
   }
-
-
 }

@@ -238,6 +238,7 @@ public class Master extends UntypedPersistentActor {
     }
   }
 
+  @Override
   public String persistenceId() {
     for (String role : JavaConversions.asJavaIterable((Cluster.get(getContext().system()).selfRoles()))) {
       if (role.startsWith("backend-")) {
@@ -268,7 +269,6 @@ public class Master extends UntypedPersistentActor {
         if (state != null && state.status.isIdle()) {
           final Work work = workState.nextWork();
           persist(new WorkState.WorkStarted(work.workId), new Procedure<WorkState.WorkStarted>() {
-
             public void apply(WorkStarted event) throws Exception {
               workState = workState.updated(event);
               log.info("Giving worker {} some work {}", workerId, event.workId);
@@ -304,7 +304,6 @@ public class Master extends UntypedPersistentActor {
         log.info("Work {} failed by worker {}", workId, workerId);
         changeWorkerToIdle(workerId, workId);
         persist(new WorkState.WorkerFailed(workId), new Procedure<WorkState.WorkerFailed>() {
-
           public void apply(WorkerFailed event) throws Exception {
             workState = workState.updated(event);
             notifyWorkers();
@@ -338,17 +337,11 @@ public class Master extends UntypedPersistentActor {
             log.info("Work timed out: {}", state.status.getWorkId());
             workers.remove(workerId);
             persist(new WorkState.WorkerTimedOut(state.status.getWorkId()), new Procedure<WorkState.WorkerTimedOut>() {
-
               public void apply(WorkerTimedOut event) throws Exception {
                 workState = workState.updated(event);
                 notifyWorkers();
               }
-
             });
-            // persist(WorkerTimedOut(workId)) { event ⇒
-            // workState = workState.updated(event)
-            // notifyWorkers()
-
           }
         }
       }

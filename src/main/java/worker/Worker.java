@@ -31,8 +31,6 @@ public class Worker extends UntypedActor {
   }
 
   private final ActorRef clusterClient;
-  //  private final Props workExecutorProps;
-  //  private final FiniteDuration registerInterval;
   private LoggingAdapter log = Logging.getLogger(getContext().system(), this);
   private final String workerId = UUID.randomUUID().toString();
   private final ActorRef workExecutor;
@@ -41,8 +39,6 @@ public class Worker extends UntypedActor {
 
   public Worker(ActorRef clusterClient, Props workExecutorProps, FiniteDuration registerInterval) {
     this.clusterClient = clusterClient;
-    //    this.workExecutorProps = workExecutorProps;
-    //    this.registerInterval = registerInterval;
     this.workExecutor = getContext().watch(getContext().actorOf(workExecutorProps, "exec"));
     this.registerTask = getContext().system().scheduler().schedule(Duration.Zero(), registerInterval,
         clusterClient, new SendToAll("/user/master/active", new RegisterWorker(workerId)),
@@ -59,24 +55,25 @@ public class Worker extends UntypedActor {
   @Override
   public SupervisorStrategy supervisorStrategy() {
     return new OneForOneStrategy(-1, Duration.Inf(),
-        new Function<Throwable, Directive>() {
-      public Directive apply(Throwable t) {
-        if (t instanceof ActorInitializationException)
-          return stop();
-        else if (t instanceof DeathPactException)
-          return stop();
-        else if (t instanceof Exception) {
-          if (currentWorkId != null)
-            sendToMaster(new WorkFailed(workerId, workId()));
-          getContext().become(idle);
-          return restart();
-        }
-        else {
-          return escalate();
+      new Function<Throwable, Directive>() {
+        @Override
+        public Directive apply(Throwable t) {
+          if (t instanceof ActorInitializationException)
+            return stop();
+          else if (t instanceof DeathPactException)
+            return stop();
+          else if (t instanceof Exception) {
+            if (currentWorkId != null)
+              sendToMaster(new WorkFailed(workerId, workId()));
+            getContext().become(idle);
+            return restart();
+          }
+          else {
+            return escalate();
+          }
         }
       }
-    }
-        );
+    );
   }
 
   @Override
