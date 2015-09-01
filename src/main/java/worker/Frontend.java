@@ -2,7 +2,8 @@ package worker;
 
 import akka.actor.ActorRef;
 import akka.actor.UntypedActor;
-import akka.contrib.pattern.ClusterSingletonProxy;
+import akka.cluster.singleton.ClusterSingletonProxy;
+import akka.cluster.singleton.ClusterSingletonProxySettings;
 import akka.dispatch.Mapper;
 import akka.dispatch.Recover;
 import akka.util.Timeout;
@@ -19,8 +20,12 @@ public class Frontend extends UntypedActor {
 
 
   ActorRef masterProxy = getContext().actorOf(
-      ClusterSingletonProxy.defaultProps("/user/master/active", "backend")
-      , "masterProxy");
+      ClusterSingletonProxy.props(
+          "/user/master",
+          ClusterSingletonProxySettings.create(getContext().system())
+              .withSingletonName("active")
+              .withRole("backend")),
+      "masterProxy");
 
   public void onReceive(Object message) {
 
@@ -61,7 +66,7 @@ public class Frontend extends UntypedActor {
     public String toString() {
       return "Ok";
     }
-  };
+  }
 
   public static final class NotOk implements Serializable {
     private NotOk() {}
@@ -76,5 +81,5 @@ public class Frontend extends UntypedActor {
     public String toString() {
       return "NotOk";
     }
-  };
+  }
 }

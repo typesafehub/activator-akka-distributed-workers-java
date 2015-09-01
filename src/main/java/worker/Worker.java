@@ -1,7 +1,7 @@
 package worker;
 
 import akka.actor.*;
-import akka.contrib.pattern.ClusterClient.SendToAll;
+import akka.cluster.client.ClusterClient.SendToAll;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
 import akka.japi.Function;

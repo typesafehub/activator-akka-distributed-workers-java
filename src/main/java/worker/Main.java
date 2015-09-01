@@ -1,8 +1,10 @@
 package worker;
 
 import akka.actor.*;
-import akka.contrib.pattern.ClusterClient;
-import akka.contrib.pattern.ClusterSingletonManager;
+import akka.cluster.client.ClusterClient;
+import akka.cluster.client.ClusterClientSettings;
+import akka.cluster.singleton.ClusterSingletonManager;
+import akka.cluster.singleton.ClusterSingletonManagerSettings;
 import akka.dispatch.OnFailure;
 import akka.dispatch.OnSuccess;
 import akka.pattern.Patterns;
@@ -54,8 +56,15 @@ public class Main {
     startupSharedJournal(system, (port == 2551),
         ActorPath$.MODULE$.fromString("akka.tcp://ClusterSystem@127.0.0.1:2551/user/store"));
 
-    system.actorOf(ClusterSingletonManager.defaultProps(Master.props(workTimeout), "active",
-        PoisonPill.getInstance(), role), "master");
+    system.actorOf(
+        ClusterSingletonManager.props(
+            Master.props(workTimeout),
+            PoisonPill.getInstance(),
+            ClusterSingletonManagerSettings.create(system)
+                    .withRole(role)
+                    .withSingletonName("active")
+        ),
+        "master");
   }
 
   public static void startWorker(int port) {
@@ -64,12 +73,14 @@ public class Main {
 
     ActorSystem system = ActorSystem.create("WorkerSystem", conf);
 
-    Set<ActorSelection> initialContacts = new HashSet<ActorSelection>();
+    Set<ActorPath> initialContacts = new HashSet<>();
     for (String contactAddress : conf.getStringList("contact-points")) {
-      initialContacts.add(system.actorSelection(contactAddress + "/user/receptionist"));
+      initialContacts.add(ActorPaths.fromString(contactAddress + "/system/receptionist"));
     }
 
-    final ActorRef clusterClient = system.actorOf(ClusterClient.defaultProps(initialContacts), "clusterClient");
+    final ActorRef clusterClient = system.actorOf(
+        ClusterClient.props(ClusterClientSettings.create(system).withInitialContacts(initialContacts)),
+            "clusterClient");
     system.actorOf(Worker.props(clusterClient, Props.create(WorkExecutor.class)), "worker");
   }
 

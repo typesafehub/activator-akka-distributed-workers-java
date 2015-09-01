@@ -2,16 +2,30 @@ package worker;
 
 import akka.actor.*;
 import akka.cluster.Cluster;
-import akka.contrib.pattern.*;
+import akka.cluster.ClusterEvent;
+import akka.cluster.client.ClusterClient;
+import akka.cluster.client.ClusterClientSettings;
+import akka.cluster.pubsub.DistributedPubSub;
+import akka.cluster.pubsub.DistributedPubSubMediator;
+import akka.cluster.singleton.ClusterSingletonManager;
+import akka.cluster.singleton.ClusterSingletonManagerSettings;
 import akka.testkit.JavaTestKit;
-import java.util.*;
+import akka.testkit.TestProbe;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
+import org.apache.commons.io.FileUtils;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import scala.concurrent.duration.Duration;
 import scala.concurrent.duration.FiniteDuration;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
+
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class DistributedWorkerTest {
 
@@ -19,7 +33,17 @@ public class DistributedWorkerTest {
 
   @BeforeClass
   public static void setup() {
-    system = ActorSystem.create("DistributedWorkerTest");
+    Config config = ConfigFactory.load("test.conf");
+    try {
+      File journalDir = new File(config.getString("akka.persistence.journal.leveldb.dir"));
+      FileUtils.deleteDirectory(journalDir);
+      File snapshotDir = new File(config.getString("akka.persistence.snapshot-store.local.dir"));
+      FileUtils.deleteDirectory(snapshotDir);
+    } catch (IOException ex) {
+      throw new RuntimeException("Failed to clean up old test database", ex);
+    }
+
+    system = ActorSystem.create("DistributedWorkerTest", config);
   }
 
   @AfterClass
@@ -34,16 +58,30 @@ public class DistributedWorkerTest {
   @Test
   public void testWorkers() throws Exception {
     new JavaTestKit(system) {{
+      TestProbe clusterProbe = new TestProbe(system);
+      Cluster.get(system).subscribe(clusterProbe.ref(), ClusterEvent.MemberUp.class);
+      clusterProbe.expectMsgClass(ClusterEvent.CurrentClusterState.class);
+
       Address clusterAddress = Cluster.get(system).selfAddress();
       Cluster.get(system).join(clusterAddress);
-      system.actorOf(ClusterSingletonManager.defaultProps(Master.props(workTimeout), "active",
-        PoisonPill.getInstance(), ""), "master");
+      clusterProbe.expectMsgClass(ClusterEvent.MemberUp.class);
 
-      Set<ActorSelection> initialContacts = new HashSet<ActorSelection>();
-      initialContacts.add(system.actorSelection(clusterAddress + "/user/receptionist"));
+      system.actorOf(
+          ClusterSingletonManager.props(
+              Master.props(workTimeout),
+              PoisonPill.getInstance(),
+              ClusterSingletonManagerSettings.create(system)
+                  .withSingletonName("active")
+          ),
+          "master");
 
-      ActorRef clusterClient = system.actorOf(ClusterClient.defaultProps(initialContacts),
+      Set<ActorPath> initialContacts = new HashSet<>();
+      initialContacts.add(ActorPaths.fromString(clusterAddress + "/system/receptionist"));
+
+      ActorRef clusterClient = system.actorOf(
+        ClusterClient.props(ClusterClientSettings.create(system).withInitialContacts(initialContacts)),
         "clusterClient");
+
 
       for (int n = 1; n <= 3; n += 1) {
         system.actorOf(Worker.props(clusterClient,
@@ -57,10 +95,13 @@ public class DistributedWorkerTest {
 
       final JavaTestKit results = new JavaTestKit(system);
 
-      DistributedPubSubExtension.get(system).mediator().tell(
+      DistributedPubSub.get(system).mediator().tell(
         new DistributedPubSubMediator.Subscribe(Master.ResultsTopic, results.getRef()),
         getRef());
       expectMsgClass(DistributedPubSubMediator.SubscribeAck.class);
+
+
+
 
       // might take a while for things to get connected
       new AwaitAssert(duration("10 seconds")) {

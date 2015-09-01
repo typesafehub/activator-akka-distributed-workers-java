@@ -2,15 +2,15 @@ package worker;
 
 import akka.actor.ActorRef;
 import akka.actor.UntypedActor;
-import akka.contrib.pattern.DistributedPubSubExtension;
-import akka.contrib.pattern.DistributedPubSubMediator;
+import akka.cluster.pubsub.DistributedPubSub;
+import akka.cluster.pubsub.DistributedPubSubMediator;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
 import worker.Master.WorkResult;
 
 public class WorkResultConsumer extends UntypedActor {
 
-  private ActorRef mediator = DistributedPubSubExtension.get(getContext().system()).mediator();
+  private ActorRef mediator = DistributedPubSub.get(getContext().system()).mediator();
   private LoggingAdapter log = Logging.getLogger(getContext().system(), this);
 
   {
