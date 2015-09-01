@@ -1,7 +1,7 @@
 package worker;
 
 import akka.actor.*;
-import akka.contrib.pattern.ClusterClient.SendToAll;
+import akka.cluster.client.ClusterClient.SendToAll;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
 import akka.japi.Function;
@@ -41,7 +41,7 @@ public class Worker extends UntypedActor {
     this.clusterClient = clusterClient;
     this.workExecutor = getContext().watch(getContext().actorOf(workExecutorProps, "exec"));
     this.registerTask = getContext().system().scheduler().schedule(Duration.Zero(), registerInterval,
-        clusterClient, new SendToAll("/user/master/active", new RegisterWorker(workerId)),
+        clusterClient, new SendToAll("/user/master/singleton", new RegisterWorker(workerId)),
         getContext().dispatcher(), getSelf());
   }
 
@@ -155,7 +155,7 @@ public class Worker extends UntypedActor {
   }
 
   private void sendToMaster(Object msg) {
-    clusterClient.tell(new SendToAll("/user/master/active", msg), getSelf());
+    clusterClient.tell(new SendToAll("/user/master/singleton", msg), getSelf());
   }
 
   public static final class WorkComplete  implements Serializable {
