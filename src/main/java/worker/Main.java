@@ -60,9 +60,7 @@ public class Main {
         ClusterSingletonManager.props(
             Master.props(workTimeout),
             PoisonPill.getInstance(),
-            ClusterSingletonManagerSettings.create(system)
-                    .withRole(role)
-                    .withSingletonName("active")
+            ClusterSingletonManagerSettings.create(system).withRole(role)
         ),
         "master");
   }

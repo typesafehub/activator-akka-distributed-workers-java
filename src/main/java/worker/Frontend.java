@@ -22,9 +22,7 @@ public class Frontend extends UntypedActor {
   ActorRef masterProxy = getContext().actorOf(
       ClusterSingletonProxy.props(
           "/user/master",
-          ClusterSingletonProxySettings.create(getContext().system())
-              .withSingletonName("active")
-              .withRole("backend")),
+          ClusterSingletonProxySettings.create(getContext().system()).withRole("backend")),
       "masterProxy");
 
   public void onReceive(Object message) {

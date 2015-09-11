@@ -70,8 +70,7 @@ public class DistributedWorkerTest {
           ClusterSingletonManager.props(
               Master.props(workTimeout),
               PoisonPill.getInstance(),
-              ClusterSingletonManagerSettings.create(system)
-                  .withSingletonName("active")
+              ClusterSingletonManagerSettings.create(system).withRole("backend")
           ),
           "master");
 
