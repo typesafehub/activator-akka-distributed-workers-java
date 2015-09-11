@@ -54,7 +54,7 @@ public class Main {
     ActorSystem system = ActorSystem.create("ClusterSystem", conf);
 
     startupSharedJournal(system, (port == 2551),
-        ActorPath$.MODULE$.fromString("akka.tcp://ClusterSystem@127.0.0.1:2551/user/store"));
+        ActorPaths.fromString("akka.tcp://ClusterSystem@127.0.0.1:2551/user/store"));
 
     system.actorOf(
         ClusterSingletonManager.props(
@@ -71,14 +71,9 @@ public class Main {
 
     ActorSystem system = ActorSystem.create("WorkerSystem", conf);
 
-    Set<ActorPath> initialContacts = new HashSet<>();
-    for (String contactAddress : conf.getStringList("contact-points")) {
-      initialContacts.add(ActorPaths.fromString(contactAddress + "/system/receptionist"));
-    }
-
-    final ActorRef clusterClient = system.actorOf(
-        ClusterClient.props(ClusterClientSettings.create(system).withInitialContacts(initialContacts)),
-            "clusterClient");
+    ActorRef clusterClient = system.actorOf(
+        ClusterClient.props(ClusterClientSettings.create(system)),
+        "clusterClient");
     system.actorOf(Worker.props(clusterClient, Props.create(WorkExecutor.class)), "worker");
   }
 
@@ -93,7 +88,7 @@ public class Main {
   }
 
 
-  public static void  startupSharedJournal(final ActorSystem system, boolean startStore, final ActorPath path) {
+  public static void startupSharedJournal(final ActorSystem system, boolean startStore, final ActorPath path) {
     // Start the shared journal one one node (don't crash this SPOF)
     // This will not be needed with a distributed journal
     if (startStore) {
@@ -113,15 +108,15 @@ public class Main {
         if (arg0 instanceof ActorIdentity && ((ActorIdentity) arg0).getRef() != null) {
           SharedLeveldbJournal.setStore(((ActorIdentity) arg0).getRef(), system);
         } else {
-          System.err.println("Shared journal not started at "+ path);
+          system.log().error("Lookup of shared journal at {} timed out", path);
           System.exit(-1);
         }
 
       }}, system.dispatcher());
 
     f.onFailure(new OnFailure() {
-      public void onFailure(Throwable arg0) throws Throwable {
-        System.err.println("Lookup of shared journal at "+path+" timed out" );
+      public void onFailure(Throwable ex) throws Throwable {
+        system.log().error(ex, "Lookup of shared journal at {} timed out", path);
       }}, system.dispatcher());
   }
 }
