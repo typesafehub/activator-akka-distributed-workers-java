@@ -2,10 +2,11 @@ package worker;
 
 import akka.actor.*;
 import akka.cluster.Cluster;
-import akka.contrib.pattern.ClusterReceptionistExtension;
-import akka.contrib.pattern.DistributedPubSubExtension;
-import akka.contrib.pattern.DistributedPubSubMediator.Put;
-import akka.contrib.pattern.DistributedPubSubMediator;
+import akka.cluster.client.ClusterClientReceptionist;
+import akka.cluster.client.ClusterReceptionist;
+import akka.cluster.pubsub.DistributedPubSub;
+import akka.cluster.pubsub.DistributedPubSubMediator.Put;
+import akka.cluster.pubsub.DistributedPubSubMediator;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
 import akka.persistence.UntypedPersistentActor;
@@ -35,7 +36,7 @@ public class Master extends UntypedPersistentActor {
   }
 
   private final FiniteDuration workTimeout;
-  private final ActorRef mediator = DistributedPubSubExtension.get(getContext().system()).mediator();
+  private final ActorRef mediator = DistributedPubSub.get(getContext().system()).mediator();
   private final LoggingAdapter log = Logging.getLogger(getContext().system(), this);
   private final Cancellable cleanupTask;
 
@@ -44,7 +45,7 @@ public class Master extends UntypedPersistentActor {
 
   public Master(FiniteDuration workTimeout) {
     this.workTimeout = workTimeout;
-    ClusterReceptionistExtension.get(getContext().system()).registerService(getSelf());
+    ClusterClientReceptionist.get(getContext().system()).registerService(getSelf());
     this.cleanupTask = getContext().system().scheduler().schedule(workTimeout.div(2), workTimeout.div(2), getSelf(), CleanupTick, getContext().dispatcher(), getSelf());
   }
 
