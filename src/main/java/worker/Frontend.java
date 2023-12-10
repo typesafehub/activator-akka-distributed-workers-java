@@ -1,7 +1,7 @@
 package worker;
 
 import akka.actor.ActorRef;
-import akka.actor.UntypedActor;
+import akka.actor.UntypedAbstractActor;
 import akka.cluster.singleton.ClusterSingletonProxy;
 import akka.cluster.singleton.ClusterSingletonProxySettings;
 import akka.dispatch.Mapper;
@@ -16,13 +16,13 @@ import scala.concurrent.Future;
 import static akka.pattern.Patterns.ask;
 import static akka.pattern.Patterns.pipe;
 
-public class Frontend extends UntypedActor {
+public class Frontend extends UntypedAbstractActor {
 
 
   ActorRef masterProxy = getContext().actorOf(
       ClusterSingletonProxy.props(
           "/user/master",
-          ClusterSingletonProxySettings.create(getContext().system()).withRole("backend")),
+          ClusterSingletonProxySettings.create(getContext().system()).withRole("backend").withSingletonName("singleton")),
       "masterProxy");
 
   public void onReceive(Object message) {

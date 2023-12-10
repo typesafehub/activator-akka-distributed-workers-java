@@ -1,6 +1,7 @@
 package worker;
 
 import akka.actor.*;
+import akka.actor.AbstractActor.Receive;
 import akka.cluster.Cluster;
 import akka.cluster.client.ClusterClientReceptionist;
 import akka.cluster.client.ClusterReceptionist;
@@ -9,6 +10,7 @@ import akka.cluster.pubsub.DistributedPubSubMediator.Put;
 import akka.cluster.pubsub.DistributedPubSubMediator;
 import akka.event.Logging;
 import akka.event.LoggingAdapter;
+import akka.persistence.AbstractPersistentActor;
 import akka.persistence.UntypedPersistentActor;
 import akka.japi.Procedure;
 
@@ -27,7 +29,7 @@ import worker.WorkState.WorkerFailed;
 import worker.WorkState.WorkerTimedOut;
 import static worker.MasterWorkerProtocol.*;
 
-public class Master extends UntypedPersistentActor {
+public class Master extends AbstractPersistentActor {
 
   public static String ResultsTopic = "results";
 
@@ -232,14 +234,17 @@ public class Master extends UntypedPersistentActor {
   }
 
   @Override
-  public void onReceiveRecover(Object arg0) throws Exception {
-    if (arg0 instanceof WorkDomainEvent) {
-      workState = workState.updated((WorkDomainEvent) arg0);
-      log.info("Replayed {}", arg0.getClass().getSimpleName());
-    }
+  public Receive createReceiveRecover() {
+  	// TODO Auto-generated method stub
+  	return receiveBuilder().	
+  		    match (WorkDomainEvent.class, cmd -> {
+  		      workState = workState.updated(cmd);
+  		      log.info("Replayed {}", cmd.getClass().getSimpleName());
+  		    }).build();
   }
-
-  @Override
+	
+	
+  //@Override
   public String persistenceId() {
     for (String role : JavaConversions.asJavaIterable((Cluster.get(getContext().system()).selfRoles()))) {
       if (role.startsWith("backend-")) {
@@ -251,30 +256,42 @@ public class Master extends UntypedPersistentActor {
   }
 
   @Override
-  public void onReceiveCommand(Object cmd) throws Exception {
-    if (cmd instanceof RegisterWorker) {
-      String workerId = ((RegisterWorker) cmd).workerId;
-      if (workers.containsKey(workerId)) {
-        workers.put(workerId, workers.get(workerId).copyWithRef(getSender()));
-      } else {
-        log.info("Worker registered: {}", workerId);
-        workers.put(workerId, new WorkerState(getSender(), Idle.instance));
-        if (workState.hasWork()) {
-          getSender().tell(WorkIsReady.getInstance(), getSelf());
-        }
-      }
-    } else if (cmd instanceof WorkerRequestsWork) {
-      if (workState.hasWork()) {
-        final String workerId = ((WorkerRequestsWork) cmd).workerId;
-        final WorkerState state = workers.get(workerId);
-        if (state != null && state.status.isIdle()) {
-          final Work work = workState.nextWork();
-          persist(new WorkState.WorkStarted(work.workId), new Procedure<WorkState.WorkStarted>() {
-            public void apply(WorkStarted event) throws Exception {
-              workState = workState.updated(event);
-              log.info("Giving worker {} some work {}", workerId, event.workId);
-              workers.put(workerId, state.copyWithStatus(new Busy(event.workId, workTimeout.fromNow())));
-              getSender().tell(work, getSelf());
+  public Receive createReceive(){  
+
+	  return receiveBuilder().
+	  match(Object.class, cmd -> updateState(cmd)).build();
+	  
+  }
+	  
+  		void updateState(Object cmd) {  
+  
+  		    if (cmd instanceof RegisterWorker) {
+  		      String workerId = ((RegisterWorker) cmd).workerId;
+  		      if (workers.containsKey(workerId)) {
+  		        workers.put(workerId, workers.get(workerId).copyWithRef(getSender()));
+  		      } else {
+  		        log.info("Worker registered: {}", workerId);
+  		        workers.put(workerId, new WorkerState(getSender(), Idle.instance));
+  		        if (workState.hasWork()) {
+  		          getSender().tell(WorkIsReady.getInstance(), getSelf());
+  		        }
+  		      }
+  		    } 
+  		    
+  		    
+  		    
+  		    else if (cmd instanceof WorkerRequestsWork) {
+  		      if (workState.hasWork()) {
+  		        final String workerId = ((WorkerRequestsWork) cmd).workerId;
+  		        final WorkerState state = workers.get(workerId);
+  		        if (state != null && state.status.isIdle()) {
+  		          final Work work = workState.nextWork();
+  		          persist(new WorkState.WorkStarted(work.workId), new Procedure<WorkState.WorkStarted>() {
+  		            public void apply(WorkStarted event) throws Exception {
+  		              workState = workState.updated(event);
+  		              log.info("Giving worker {} some work {}", workerId, event.workId);
+  		              workers.put(workerId, state.copyWithStatus(new Busy(event.workId, workTimeout.fromNow())));
+  		              getSender().tell(work, getSelf());
 
             }
           });

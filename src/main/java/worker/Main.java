@@ -1,6 +1,7 @@
 package worker;
 
 import akka.actor.*;
+import akka.actor.AbstractActor.Receive;
 import akka.cluster.client.ClusterClient;
 import akka.cluster.client.ClusterClientSettings;
 import akka.cluster.singleton.ClusterSingletonManager;
@@ -8,6 +9,8 @@ import akka.cluster.singleton.ClusterSingletonManagerSettings;
 import akka.dispatch.OnFailure;
 import akka.dispatch.OnSuccess;
 import akka.pattern.Patterns;
+import akka.persistence.AbstractPersistentActor;
+import akka.persistence.SnapshotOffer;
 import akka.persistence.journal.leveldb.SharedLeveldbJournal;
 import akka.persistence.journal.leveldb.SharedLeveldbStore;
 import akka.util.Timeout;
@@ -19,6 +22,10 @@ import scala.concurrent.Future;
 import scala.concurrent.duration.Duration;
 import scala.concurrent.duration.FiniteDuration;
 
+import static java.util.Arrays.asList;
+
+import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -54,7 +61,7 @@ public class Main {
     ActorSystem system = ActorSystem.create("ClusterSystem", conf);
 
     startupSharedJournal(system, (port == 2551),
-        ActorPaths.fromString("akka.tcp://ClusterSystem@127.0.0.1:2551/user/store"));
+        ActorPaths.fromString("akka.tcp://ClusterSystem@127.0.0.1:2551/user/store"),role);
 
     system.actorOf(
         ClusterSingletonManager.props(
@@ -88,7 +95,7 @@ public class Main {
   }
 
 
-  public static void startupSharedJournal(final ActorSystem system, boolean startStore, final ActorPath path) {
+  public static void startupSharedJournal(final ActorSystem system, boolean startStore, final ActorPath path,String role) {
     // Start the shared journal one one node (don't crash this SPOF)
     // This will not be needed with a distributed journal
     if (startStore) {
@@ -105,8 +112,9 @@ public class Main {
 
       @Override
       public void onSuccess(Object arg0) throws Throwable {
-        if (arg0 instanceof ActorIdentity && ((ActorIdentity) arg0).getRef() != null) {
-          SharedLeveldbJournal.setStore(((ActorIdentity) arg0).getRef(), system);
+        if (arg0 instanceof ActorIdentity && ((ActorIdentity) arg0).getActorRef() != null) {
+          SharedLeveldbJournal.setStore(((ActorIdentity) arg0).getRef(), system);              
+          
         } else {
           system.log().error("Lookup of shared journal at {} timed out", path);
           System.exit(-1);
